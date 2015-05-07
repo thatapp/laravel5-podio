@@ -1,5 +1,5 @@
 {
-  "name": "podio/podio-php",
+  "name": "techego/laravel5-podio",
   "description": "PHP Client for Podio API",
   "keywords": ["podio"],
   "homepage": "http://github.com/podio/podio-php",
