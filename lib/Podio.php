@@ -4,8 +4,9 @@ use Illuminate\Support\Facades\Session;
 
 class Podio
 {
-    public $oauth, $debug, $logger, $session_manager, $last_response, $auth_type;
+    public $oauth, $debug, $logger, $session_manager, $last_response, $auth_type, $api;
     protected $url, $client_id, $client_secret, $secret, $ch, $headers;
+
 
     const VERSION = '4.0.3';
 
@@ -16,18 +17,31 @@ class Podio
 
     private static $clients = array();
 
-    public static function FromSession($client_id = null, $client_secret = null, $options = array('save_session' => true, 'curl_options' => array()))
+    public static function create_or_find($client_id = null, $client_secret = null, $session_manager = null, $curl_option = array())
     {
+        if ($session_manager) {
+            if(!array_key_exists(Podio::$clients, $session_manager->get()->refresh_token)) {
+                // We don't have the client saved, so it doesn't exist //
+
+            } else {
+                return;
+            }
+
+        }
+
         if (!Session::has('podio-entry') || !isset(self::$clients[Session::get('podio-entry')])) {
             Session::put('podio-entry', $client_id);
             self::$clients[$client_id] = new Podio($client_id, $client_secret, $options);
         }
+
         return self::$clients[Session::get('podio-entry')];
     }
 
 
-    public function __construct($client_id, $client_secret, $options = array('save_session' => true, 'curl_options' => array()))
+    private function __construct($client_id, $client_secret, $options = array('save_session' => true, 'curl_options' => array()))
     {
+        $this->api = new ApiHelper($this);
+
         // Setup client info
         $this->client_id = $client_id;
         $this->client_secret = $client_secret;
@@ -51,8 +65,8 @@ class Podio
             curl_setopt_array($this->ch, $options['curl_options']);
         }
 
-        if ($options && !empty($options['save_session']) && $options['save_session']) {
-            $this->session_manager = new PodioSessionManager();
+        if ($options && !empty($options['save_session'])) {
+            $this->session_manager = new PodioSessionManager($options['save_session']);
             $this->oauth = $this->session_manager->get();
         }
     }
@@ -72,9 +86,9 @@ class Podio
         return $this->authenticate('authorization_code', array('code' => $authorization_code, 'redirect_uri' => $redirect_uri));
     }
 
-    public function refresh_access_token()
+    public function refresh_access_token($refresh_token = null)
     {
-        return $this->authenticate('refresh_token', array('refresh_token' => $this->oauth->refresh_token));
+        return $this->authenticate('refresh_token', array('refresh_token' => $refresh_token ? $refresh_token : $this->oauth->refresh_token));
     }
 
     public function authenticate($grant_type, $attributes)
@@ -150,18 +164,16 @@ class Podio
         return $this->oauth && $this->oauth->access_token;
     }
 
-    public static function request($method, $url, $attributes = array(), $options = array())
+    public function request($method, $url, $attributes = array(), $options = array())
     {
-        $podio = Podio::FromSession();
-
-        if (!$podio || !$podio->ch) {
+        if (!$this->ch) {
             throw new Exception('Client has not been setup with client id and client secret.');
         }
 
         // Reset attributes so we can reuse curl object
-        curl_setopt($podio->ch, CURLOPT_POSTFIELDS, null);
+        curl_setopt($this->ch, CURLOPT_POSTFIELDS, null);
 
-        unset($podio->headers['Content-length']);
+        unset($this->headers['Content-length']);
         $original_url = $url;
         $encoded_attributes = null;
 
@@ -175,8 +187,8 @@ class Podio
 
         switch ($method) {
             case self::GET:
-                curl_setopt($podio->ch, CURLOPT_CUSTOMREQUEST, self::GET);
-                $podio->headers['Content-type'] = 'application/x-www-form-urlencoded';
+                curl_setopt($this->ch, CURLOPT_CUSTOMREQUEST, self::GET);
+                $this->headers['Content-type'] = 'application/x-www-form-urlencoded';
 
                 $separator = strpos($url, '?') ? '&' : '?';
                 if ($attributes) {
@@ -184,11 +196,11 @@ class Podio
                     $url = $url . $separator . $query;
                 }
 
-                $podio->headers['Content-length'] = "0";
+                $this->headers['Content-length'] = "0";
                 break;
             case self::DELETE:
-                curl_setopt($podio->ch, CURLOPT_CUSTOMREQUEST, self::DELETE);
-                $podio->headers['Content-type'] = 'application/x-www-form-urlencoded';
+                curl_setopt($this->ch, CURLOPT_CUSTOMREQUEST, self::DELETE);
+                $this->headers['Content-type'] = 'application/x-www-form-urlencoded';
 
                 $separator = strpos($url, '?') ? '&' : '?';
                 if ($attributes) {
@@ -196,66 +208,66 @@ class Podio
                     $url = $url . $separator . $query;
                 }
 
-                $podio->headers['Content-length'] = "0";
+                $this->headers['Content-length'] = "0";
                 break;
             case self::POST:
-                curl_setopt(self::$ch, CURLOPT_CUSTOMREQUEST, self::POST);
-		if (!empty($options['upload'])) {
-		  curl_setopt(self::$ch, CURLOPT_POST, TRUE);
-		  curl_setopt(self::$ch, CURLOPT_SAFE_UPLOAD, FALSE);
-		  curl_setopt(self::$ch, CURLOPT_POSTFIELDS, $attributes);
-		  self::$headers['Content-type'] = 'multipart/form-data';
-		}
-		elseif (empty($options['oauth_request'])) {
-		  // application/json
-		  $encoded_attributes = json_encode($attributes);
-		  curl_setopt(self::$ch, CURLOPT_POSTFIELDS, $encoded_attributes);
-		  self::$headers['Content-type'] = 'application/json';
-		}
-		else {
-		  // x-www-form-urlencoded
-		  $encoded_attributes = self::encode_attributes($attributes);
-		  curl_setopt(self::$ch, CURLOPT_POSTFIELDS, $encoded_attributes);
-		  self::$headers['Content-type'] = 'application/x-www-form-urlencoded';
-		}
-		break;
+                curl_setopt($this->ch, CURLOPT_CUSTOMREQUEST, self::POST);
+                if (!empty($options['upload'])) {
+                    curl_setopt($this->ch, CURLOPT_POST, TRUE);
+                    curl_setopt($this->ch, CURLOPT_SAFE_UPLOAD, FALSE);
+                    curl_setopt($this->ch, CURLOPT_POSTFIELDS, $attributes);
+                    $this->headers['Content-type'] = 'multipart/form-data';
+                }
+                elseif (empty($options['oauth_request'])) {
+                    // application/json
+                    $encoded_attributes = json_encode($attributes);
+                    curl_setopt($this->ch, CURLOPT_POSTFIELDS, $encoded_attributes);
+                    $this->headers['Content-type'] = 'application/json';
+                }
+                else {
+                  // x-www-form-urlencoded
+                  $encoded_attributes = self::encode_attributes($attributes);
+                  curl_setopt($this->ch, CURLOPT_POSTFIELDS, $encoded_attributes);
+                    $this->headers['Content-type'] = 'application/x-www-form-urlencoded';
+                }
+                break;
             case self::PUT:
                 $encoded_attributes = json_encode($attributes);
-                curl_setopt($podio->ch, CURLOPT_CUSTOMREQUEST, self::PUT);
-                curl_setopt($podio->ch, CURLOPT_POSTFIELDS, $encoded_attributes);
-                $podio->headers['Content-type'] = 'application/json';
+                curl_setopt($this->ch, CURLOPT_CUSTOMREQUEST, self::PUT);
+                curl_setopt($this->ch, CURLOPT_POSTFIELDS, $encoded_attributes);
+                $this->headers['Content-type'] = 'application/json';
                 break;
         }
 
         // Add access token to request
-        if (isset($podio->oauth) && !empty($podio->oauth->access_token) && !(isset($options['oauth_request']) && $options['oauth_request'])) {
-            $token = $podio->oauth->access_token;
-            $podio->headers['Authorization'] = "OAuth2 {$token}";
+        if (isset($this->oauth) && !empty($this->oauth->access_token) && !(isset($options['oauth_request']) && $options['oauth_request'])) {
+            $token = $this->oauth->access_token;
+            $this->headers['Authorization'] = "OAuth2 {$token}";
         } else {
-            unset($podio->headers['Authorization']);
+            unset($this->headers['Authorization']);
         }
 
         // File downloads can be of any type
         if (empty($options['file_download'])) {
-            $podio->headers['Accept'] = 'application/json';
+            $this->headers['Accept'] = 'application/json';
         } else {
-            $podio->headers['Accept'] = '*/*';
+            $this->headers['Accept'] = '*/*';
         }
 
-        curl_setopt($podio->ch, CURLOPT_HTTPHEADER, $podio->curl_headers());
-        curl_setopt($podio->ch, CURLOPT_URL, empty($options['file_download']) ? $podio->url . $url : $url);
+        curl_setopt($this->ch, CURLOPT_HTTPHEADER, $this->curl_headers());
+        curl_setopt($this->ch, CURLOPT_URL, empty($options['file_download']) ? $this->url . $url : $url);
 
         $response = new PodioResponse();
-        $raw_response = curl_exec($podio->ch);
-        $raw_headers_size = curl_getinfo($podio->ch, CURLINFO_HEADER_SIZE);
+        $raw_response = curl_exec($this->ch);
+        $raw_headers_size = curl_getinfo($this->ch, CURLINFO_HEADER_SIZE);
         $response->body = substr($raw_response, $raw_headers_size);
-        $response->status = curl_getinfo($podio->ch, CURLINFO_HTTP_CODE);
+        $response->status = curl_getinfo($this->ch, CURLINFO_HTTP_CODE);
         $response->headers = Podio::parse_headers(substr($raw_response, 0, $raw_headers_size));
-        $podio->last_response = $response;
+        $this->last_response = $response;
 
         if (!isset($options['oauth_request'])) {
-            $curl_info = curl_getinfo($podio->ch, CURLINFO_HEADER_OUT);
-            $podio->log_request($method, $url, $encoded_attributes, $response, $curl_info);
+            $curl_info = curl_getinfo($this->ch, CURLINFO_HEADER_OUT);
+            $this->log_request($method, $url, $encoded_attributes, $response, $curl_info);
         }
 
         switch ($response->status) {
@@ -269,7 +281,7 @@ class Podio
                 $body = $response->json_body();
                 if (strstr($body['error'], 'invalid_grant')) {
                     // Reset access token & refresh_token
-                    $podio->clear_authentication();
+                    $this->clear_authentication();
                     throw new PodioInvalidGrantError($response->body, $response->status, $url);
                     break;
                 } else {
@@ -279,23 +291,23 @@ class Podio
             case 401 :
                 $body = $response->json_body();
                 if (strstr($body['error_description'], 'expired_token') || strstr($body['error'], 'invalid_token')) {
-                    if ($podio->oauth->refresh_token) {
+                    if ($this->oauth->refresh_token) {
                         // Access token is expired. Try to refresh it.
-                        if ($podio->authenticate('refresh_token', array('refresh_token' => $podio->oauth->refresh_token))) {
+                        if ($this->authenticate('refresh_token', array('refresh_token' => $this->oauth->refresh_token))) {
                             // Try the original request again.
-                            return Podio::request($method, $original_url, $attributes);
+                            return $this->request($method, $original_url, $attributes);
                         } else {
-                            $podio->clear_authentication();
+                            $this->clear_authentication();
                             throw new PodioAuthorizationError($response->body, $response->status, $url);
                         }
                     } else {
                         // We have tried in vain to get a new access token. Log the user out.
-                        $podio->clear_authentication();
+                        $this->clear_authentication();
                         throw new PodioAuthorizationError($response->body, $response->status, $url);
                     }
                 } elseif (strstr($body['error'], 'invalid_request') || strstr($body['error'], 'unauthorized')) {
                     // Access token is invalid.
-                    $podio->clear_authentication();
+                    $this->clear_authentication();
                     throw new PodioAuthorizationError($response->body, $response->status, $url);
                 }
                 break;
@@ -329,24 +341,24 @@ class Podio
         return false;
     }
 
-    public static function get($url, $attributes = array(), $options = array())
+    public function get($url, $attributes = array(), $options = array())
     {
-        return Podio::request(self::GET, $url, $attributes, $options);
+        return $this->request(self::GET, $url, $attributes, $options);
     }
 
-    public static function post($url, $attributes = array(), $options = array())
+    public function post($url, $attributes = array(), $options = array())
     {
-        return Podio::request(self::POST, $url, $attributes, $options);
+        return $this->request(self::POST, $url, $attributes, $options);
     }
 
-    public static function put($url, $attributes = array())
+    public function put($url, $attributes = array())
     {
-        return Podio::request(self::PUT, $url, $attributes);
+        return $this->request(self::PUT, $url, $attributes);
     }
 
-    public static function delete($url, $attributes = array())
+    public function delete($url, $attributes = array())
     {
-        return Podio::request(self::DELETE, $url, $attributes);
+        return $this->request(self::DELETE, $url, $attributes);
     }
 
     public function curl_headers()
@@ -481,4 +493,6 @@ class Podio
             }
         }
     }
+
+
 }
