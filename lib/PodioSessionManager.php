@@ -2,17 +2,19 @@
 
 abstract class PodioSessionManager
 {
-    /**
-     * Returns an PodioOAuth class from session
-     * @return PodioOAuth
-     */
-    public abstract function get();
+    private static $cached_clients = array();
 
+    public function get($key)
+    {
+        if (array_key_exists($key, self::$cached_clients)) {
+            return self::$cached_clients[$key];
+        }
+        return null;
+    }
 
-    /**
-     * Save the current PodioOAuth to the session
-     * @return PodioOAuth
-     */
-    public abstract function set($oauth);
+    public function set($key, $podio)
+    {
+        self::$cached_clients[$key] = $podio;
+    }
 
 }

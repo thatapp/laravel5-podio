@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Session;
 
 class Podio
 {
-    public $oauth, $debug, $logger, $session_manager, $last_response, $auth_type, $api;
+    public $oauth, $debug, $logger, $last_response, $auth_type, $api;
     protected $url, $client_id, $client_secret, $secret, $ch, $headers;
 
 
@@ -15,30 +15,62 @@ class Podio
     const PUT = 'PUT';
     const DELETE = 'DELETE';
 
-    private static $clients = array();
+    private static $session_manager;
 
-    public static function create_or_find($client_id = null, $client_secret = null, $session_manager = null, $curl_option = array())
+    /**
+     * @param $client_id The ID required for authentication from Podio
+     * @param $client_secret The Secret required for authentication from Podio
+     * @param null $session_manager . If provided, will override the current session manager
+     * @param array $curl_option . If provided, will override the current cURL options.
+     * @return Podio
+     */
+    public static function create($client_id, $client_secret, $session_manager = null, $curl_option = array())
     {
-        if ($session_manager) {
-            if(!array_key_exists(Podio::$clients, $session_manager->get()->refresh_token)) {
-                // We don't have the client saved, so it doesn't exist //
+        /*
+         * We find Podio objects based on the given refresh code from Podio.
+         * Because those usually don't change very often; not like access tokens
+         * or the like.
+         */
 
-            } else {
-                return;
-            }
-
+        // Create session on first call of create() //
+        if (!self::$session_manager) {
+            self::$session_manager = $session_manager ?: new PodioSessionManager();
+        } elseif ($session_manager) {
+            self::$session_manager = $session_manager;
         }
 
-        if (!Session::has('podio-entry') || !isset(self::$clients[Session::get('podio-entry')])) {
-            Session::put('podio-entry', $client_id);
-            self::$clients[$client_id] = new Podio($client_id, $client_secret, $options);
-        }
+        return new Podio($client_id, $client_secret, $curl_option);
+    }
 
-        return self::$clients[Session::get('podio-entry')];
+    /**
+     * @param $session_id The session identifier. We will need to store this in order to be able to pull the correct
+     *                    Podio object from the session
+     * @throws PodioForbiddenError If create() hasn't been called
+     * @return Podio
+     */
+    public function save_to_session($session_id)
+    {
+        if (!self::$session_manager)
+            throw new PodioForbiddenError('You must call create() before trying to find a Podio Object', null, null);
+
+        return self::$session_manager->set($session_id, $this);
+    }
+
+    /**
+     * @param $session_id The session identifier. We use this to pull the correct podio object from session.
+     * @throws PodioForbiddenError If create() hasn't been called
+     * @return Podio
+     */
+    public static function get_from_session($session_id)
+    {
+        if (!self::$session_manager)
+            throw new PodioForbiddenError('You must call create() before trying to find a Podio Object', null, null);
+
+        return self::$session_manager->get($session_id);
     }
 
 
-    private function __construct($client_id, $client_secret, $options = array('save_session' => true, 'curl_options' => array()))
+    private function __construct($client_id, $client_secret, $curl_option = array())
     {
         $this->api = new ApiHelper($this);
 
@@ -61,13 +93,8 @@ class Podio
         curl_setopt($this->ch, CURLOPT_HEADER, true);
         curl_setopt($this->ch, CURLINFO_HEADER_OUT, true);
 
-        if ($options && !empty($options['curl_options'])) {
+        if (!empty($curl_option)) {
             curl_setopt_array($this->ch, $options['curl_options']);
-        }
-
-        if ($options && !empty($options['save_session'])) {
-            $this->session_manager = new PodioSessionManager($options['save_session']);
-            $this->oauth = $this->session_manager->get();
         }
     }
 
@@ -134,10 +161,6 @@ class Podio
                 $this->auth_type = $auth_type;
             }
 
-            if ($this->session_manager) {
-                $this->session_manager->set($this->oauth, $this->auth_type);
-            }
-
             return true;
         }
         return false;
@@ -146,10 +169,6 @@ class Podio
     public function clear_authentication()
     {
         $this->oauth = new PodioOAuth();
-
-        if ($this->session_manager) {
-            $this->session_manager->set($this->oauth, $this->auth_type);
-        }
     }
 
     public function authorize_url($redirect_uri)
@@ -466,11 +485,6 @@ class Podio
 
     public function shutdown()
     {
-        // Write any new access and refresh tokens to session.
-        if ($this->session_manager) {
-            $this->session_manager->set($this->oauth, $this->auth_type);
-        }
-
         // Log api call times if debugging
         if ($this->debug && $this->logger) {
             $timestamp = gmdate('Y-m-d H:i:s');
