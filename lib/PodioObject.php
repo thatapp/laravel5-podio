@@ -194,7 +194,7 @@ class PodioObject
         throw new PodioDataIntegrityError("Attribute cannot be assigned. Property '{$name}' doesn't exist.");
     }
 
-    public static function listing($response_or_attributes)
+    public function listing($response_or_attributes)
     {
         if ($response_or_attributes) {
             if (is_object($response_or_attributes) && get_class($response_or_attributes) == 'PodioResponse') {
@@ -204,30 +204,29 @@ class PodioObject
             }
             $list = array();
             foreach ($body as $attributes) {
-                $class_name = get_called_class();
-                $list[] = new $class_name(array_merge($attributes, array('__api_values' => true)));
+                $list[] = array_merge($attributes, array('__api_values' => true));
             }
             return $list;
         }
+        return null;
     }
 
-    public static function member($response)
+    public function member($response)
     {
         if ($response) {
-            $class_name = get_called_class();
-            return new $class_name(array_merge($response->json_body(), array('__api_values' => true)));
+            return array_merge($response->json_body(), array('__api_values' => true));
         }
+        return null;
     }
 
-    public static function collection($response, $collection_type = "PodioCollection")
+    public function collection($response, $collection_type = "PodioCollection")
     {
         if ($response) {
             $body = $response->json_body();
             $list = array();
             if (isset($body['items'])) {
                 foreach ($body['items'] as $attributes) {
-                    $class_name = get_called_class();
-                    $list[] = new $class_name(array_merge($attributes, array('__api_values' => true)));
+                    $list[] = array_merge($attributes, array('__api_values' => true));
                 }
             }
             return new $collection_type($list, $body['filtered'], $body['total']);

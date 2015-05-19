@@ -1,6 +1,6 @@
 <?php
 
-abstract class PodioSessionManager
+class PodioSessionManager
 {
     private static $cached_clients = array();
 
