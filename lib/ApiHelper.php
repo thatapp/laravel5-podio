@@ -5,7 +5,7 @@ class ApiHelper implements ArrayAccess
     private $podio;
 
     /**
-     * @param $podio The Podio Object containing this api helper
+     * @param $podio Podio Object containing this api helper
      */
     public function __construct($podio) {
         $this->podio = $podio;

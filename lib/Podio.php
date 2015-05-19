@@ -1,6 +1,6 @@
 <?php
 
-use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Cache;
 
 class Podio
 {
@@ -15,16 +15,12 @@ class Podio
     const PUT = 'PUT';
     const DELETE = 'DELETE';
 
-    private static $session_manager;
-
     /**
-     * @param $client_id The ID required for authentication from Podio
-     * @param $client_secret The Secret required for authentication from Podio
-     * @param null $session_manager . If provided, will override the current session manager
-     * @param array $curl_option . If provided, will override the current cURL options.
-     * @return Podio
+     * @param $session_id The session identifier. We will need to store this in order to be able to pull the correct
+     *                    Podio object from the session
+     * @throws Exception. If given session id is not an int or string
      */
-    public static function create($client_id, $client_secret, $session_manager = null, $curl_option = array())
+    public function save_to_cache($session_id)
     {
         /*
          * We find Podio objects based on the given refresh code from Podio.
@@ -32,45 +28,60 @@ class Podio
          * or the like.
          */
 
-        // Create session on first call of create() //
-        if (!self::$session_manager) {
-            self::$session_manager = $session_manager ?: new PodioSessionManager();
-        } elseif ($session_manager) {
-            self::$session_manager = $session_manager;
-        }
+        if (!is_string($session_id) && !is_int($session_id))
+            throw new Exception('Given session id is not a valid key');
 
-        return new Podio($client_id, $client_secret, $curl_option);
-    }
-
-    /**
-     * @param $session_id The session identifier. We will need to store this in order to be able to pull the correct
-     *                    Podio object from the session
-     * @throws PodioForbiddenError If create() hasn't been called
-     * @return Podio
-     */
-    public function save_to_session($session_id)
-    {
-        if (!self::$session_manager)
-            throw new PodioForbiddenError('You must call create() before trying to find a Podio Object', null, null);
-
-        return self::$session_manager->set($session_id, $this);
+        Cache::forever($session_id, serialize($this->oauth));
     }
 
     /**
      * @param $session_id The session identifier. We use this to pull the correct podio object from session.
-     * @throws PodioForbiddenError If create() hasn't been called
-     * @return Podio
+     * @throws Exception If @save_to_session() hasn't been called, or if given session id is not an int or string
+     * @return Podio The podio object from cache.
      */
-    public static function get_from_session($session_id)
+    public static function get_from_cache($session_id)
     {
-        if (!self::$session_manager)
-            throw new PodioForbiddenError('You must call create() before trying to find a Podio Object', null, null);
+        if (!is_string($session_id) && !is_int($session_id))
+            throw new Exception('Given session id is not a valid key');
 
-        return self::$session_manager->get($session_id);
+        if (!Cache::has($session_id))
+            throw new Exception('You must call @save_to_session() before trying to find access a saved Podio Object');
+
+        $oauth = unserialize(Cache::get($session_id));
+        return self::_from_oauth($oauth);
+    }
+
+    /**
+     * @param $session_id, The Id of the session to purge from the cache
+     * @throws Exception If given session id is not an int or string
+     */
+    public static function purge_from_cache($session_id)
+    {
+
+        if (!is_string($session_id) && !is_int($session_id))
+            throw new Exception('Given session id is not a valid key');
+
+        if (!Cache::has($session_id))
+            return; // Doesn't exist. Let's not make a fuss about it //
+
+        Cache::forget($session_id);
     }
 
 
-    private function __construct($client_id, $client_secret, $curl_option = array())
+    /* Creates a podio object from the oauth. Useful for caching podio credentials without actually caching podio */
+    private static function _from_oauth(PodioOAuth $_oauth)
+    {
+        $podio = new Podio($_oauth->client_id, $_oauth->client_secret);
+        $podio->oauth = $_oauth;
+        return $podio;
+    }
+
+    /**
+     * @param $client_id Client id required by Podio for authorization
+     * @param $client_secret Client secret required by Podio for authorization
+     * @param array $curl_option Optional cURL options when doing requests
+     */
+    public function __construct($client_id, $client_secret, $curl_option = array())
     {
         $this->api = new ApiHelper($this);
 
@@ -154,7 +165,7 @@ class Podio
         $request_data = array_merge($data, array('client_id' => $this->client_id, 'client_secret' => $this->client_secret));
         if ($response = $this->request(self::POST, '/oauth/token', $request_data, array('oauth_request' => true))) {
             $body = $response->json_body();
-            $this->oauth = new PodioOAuth($body['access_token'], $body['refresh_token'], $body['expires_in'], $body['ref']);
+            $this->oauth = new PodioOAuth($this->client_id, $this->client_secret, $body['access_token'], $body['refresh_token'], $body['expires_in'], $body['ref']);
 
             // Don't touch auth_type if we are refreshing automatically as it'll be reset to null
             if ($grant_type !== 'refresh_token') {
