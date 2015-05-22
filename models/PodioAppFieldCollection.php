@@ -28,7 +28,7 @@ class PodioAppFieldCollection extends PodioFieldCollection {
    */
   public function offsetSet($offset, $field) {
 
-    if (!is_a($field, 'PodioAppField')) {
+    if (!is_array($field) && !array_key_exists("item_id", $field)) {
       throw new PodioDataIntegrityError("Objects in PodioAppFieldCollection must be of class PodioAppField");
     }
 

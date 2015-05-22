@@ -10,7 +10,8 @@ class PodioObject
 
     protected $podio;
 
-    public function __construct($podio) {
+    public function __construct($podio)
+    {
         $this->podio = $podio;
     }
 
@@ -300,72 +301,11 @@ class PodioObject
         }
     }
 
-    public function as_json($encoded = true)
+    public function as_json()
     {
-        $result = array();
-        foreach ($this->__properties as $name => $property) {
-            if (!$this->has_relationship($name) && $this->has_attribute($name) && !is_null($this->__attributes[$name])) {
-                $result[$name] = $this->__attributes[$name];
-            }
-        }
-        foreach ($this->__relationships as $name => $type) {
-            if ($type == 'has_one') {
-                $target_name = $name;
-                if (!empty($this->__properties[$name]['options']['json_target'])) {
-                    $target_name = $this->__properties[$name]['options']['json_target'];
-                }
+        // Made it like this to maintain old code stuff...
 
-                if ($this->has_attribute($name)) {
-                    if (!empty($this->__properties[$name]['options']['json_value'])) {
-                        $result[$target_name] = $this->__attributes[$name]->{$this->__properties[$name]['options']['json_value']};
-                    } elseif (is_a($this->__attributes[$name], 'PodioFieldCollection')) {
-                        foreach ($this->__attributes[$name] as $field) {
-                            // Only use external_id for item fields
-                            $key = $field->external_id && is_a($this->__attributes[$name], 'PodioItemFieldCollection') ? $field->external_id : $field->id;
-                            $list[$key] = $field->as_json(false);
-                        }
-                        $result[$name] = $list;
-                    } elseif (is_object($this->__attributes[$name]) && get_class($this->__attributes[$name]) == 'PodioReference') {
-                        $result['ref_type'] = $this->__attributes[$name]->type;
-                        $result['ref_id'] = $this->__attributes[$name]->id;
-                    } else {
-                        $child = $this->__attributes[$name]->as_json(false);
-                        if ($child) {
-                            $result[$target_name] = $child;
-                        }
-                    }
-                }
-            } elseif ($type == 'has_many') {
-                if ($this->has_attribute($name)) {
-                    $list = array();
-                    foreach ($this->__attributes[$name] as $item) {
-                        if (!empty($this->__properties[$name]['options']['json_value'])) {
-                            $list[] = $item->{$this->__properties[$name]['options']['json_value']};
-                        }
-                        // TODO: This really should be moved to PodioCollection (should implement as_json)
-                        //       and PodioItemFieldCollection for the special case
-                        elseif (get_class($this->__attributes[$name]) === 'PodioItemFieldCollection') {
-                            $key = $item->external_id ? $item->external_id : (string)$item->field_id;
-                            $list[$key] = $item->as_json(false);
-                        } else {
-                            $list[] = $item->as_json(false);
-                        }
-                    }
-                    if ($list) {
-                        if (!empty($this->__properties[$name]['options']['json_target'])) {
-                            $result[$this->__properties[$name]['options']['json_target']] = $list;
-                        } else {
-                            $result[$name] = $list;
-                        }
-                    }
-                }
-            }
-        }
-
-        if ($result) {
-            return $encoded ? json_encode($result) : $result;
-        }
-        return null;
+        return json_encode($this);
     }
 
 }
