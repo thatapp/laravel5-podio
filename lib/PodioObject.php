@@ -64,24 +64,20 @@ class PodioObject
                         // Special handling for ItemField and AppField.
                         // We need to create collection of the right type
                         if ($class_name == 'PodioItemField') {
-                            $collection_class = 'PodioItemFieldCollection';
                             $values = $default_attributes[$name];
-
                             // Make sure we pass along info on whether the values property
                             // contains API style values or not
-                            $collection = new $collection_class($values, $has_api_values);
+                            $collection = new PodioItemFieldCollection($values, $has_api_values);
                         } elseif ($class_name == 'PodioAppField') {
-                            $collection_class = 'PodioAppFieldCollection';
                             $values = $default_attributes[$name];
-                            $collection = new $collection_class($values);
+                            $collection = new PodioAppFieldCollection($values);
                         } else {
-                            $collection_class = 'PodioCollection';
                             $values = array();
                             foreach ($default_attributes[$name] as $value) {
                                 $child = is_object($value) ? $value : new $class_name($value);
                                 $values[] = $child;
                             }
-                            $collection = new $collection_class($values);
+                            $collection = new PodioCollection($values);
                         }
                         $collection->add_relationship($this, $name);
                         $this->set_attribute($name, $collection);
@@ -113,6 +109,8 @@ class PodioObject
 
             return $this->__attributes[$name];
         }
+
+        return null;
     }
 
     public function __isset($name)
@@ -139,6 +137,8 @@ class PodioObject
                 return 'Y-m-d';
             }
         }
+
+        return null;
     }
 
     public function relationship()
@@ -231,6 +231,8 @@ class PodioObject
             }
             return new $collection_type($list, $body['filtered'], $body['total']);
         }
+
+        return null;
     }
 
     public function can($right)

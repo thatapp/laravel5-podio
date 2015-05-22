@@ -134,7 +134,7 @@ class PodioItem extends PodioObject
     public function filter($app_id, $attributes = array(), $options = array())
     {
         $url = $this->podio->url_with_options("/item/app/{$app_id}/filter/", $options);
-        return self::collection($this->podio->post($url, $attributes ? $attributes : new StdClass()), "PodioItemCollection");
+        return $this->collection($this->podio->post($url, $attributes ? $attributes : new StdClass()), "PodioItemCollection");
     }
 
     /**
@@ -142,7 +142,7 @@ class PodioItem extends PodioObject
      */
     public function filter_by_view($app_id, $view_id, $attributes = array())
     {
-        return self::collection($this->podio->post("/item/app/{$app_id}/filter/{$view_id}/", $attributes ? $attributes : new StdClass()), "PodioItemCollection");
+        return $this->collection($this->podio->post("/item/app/{$app_id}/filter/{$view_id}/", $attributes ? $attributes : new StdClass()), "PodioItemCollection");
     }
 
     /**
@@ -153,6 +153,7 @@ class PodioItem extends PodioObject
         $url = $this->podio->url_with_options("/item/{$item_id}", $options);
         return $this->podio->delete($url, $attributes);
     }
+
 
     /**
      * @see https://developers.podio.com/doc/items/bulk-delete-items-19406111
@@ -168,7 +169,7 @@ class PodioItem extends PodioObject
      */
     public function delete_reference($item_id)
     {
-        return $this->podio->delete("/item/{$item_id}/ref", $attributes);
+        return $this->podio->delete("/item/{$item_id}/ref");
     }
 
     /**
