@@ -29,13 +29,14 @@ class PodioFile extends PodioObject
     }
 
     /**
-     * Returns the raw bytes of a file. Beware: This is not a method.
-     * It can only be used after you have a PodioFile object.
+     * Returns the raw bytes of a file.
+     * @param $link
+     * @return
+     * @internal param null $size
      */
-    public function get_raw($size = null)
+    public function get_raw($link)
     {
-        $link = $size ? ($this->link . '/' . $size) : $this->link;
-        return $this->podio->get($link, array(), array('file_download' => true))->body;
+        return $this->podio->get($link, [], ['file_download' => true])->body;
     }
 
     /**
