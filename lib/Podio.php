@@ -45,7 +45,7 @@ class Podio
             throw new Exception('Given session id is not a valid key');
 
         if (!Cache::has($session_id))
-            throw new Exception('You must call @save_to_session() before trying to find access a saved Podio Object');
+            return null;
 
         $oauth = unserialize(Cache::get($session_id));
         return self::_from_oauth($oauth);
