@@ -1,6 +1,6 @@
 <?php
 
-class PodioObject
+class PodioObject implements ArrayAccess
 {
     private $__attributes = array();
     private $__belongs_to;
@@ -57,7 +57,7 @@ class PodioObject
                     $class_name = 'Podio' . $property['type'];
 
                     if ($type == 'has_one') {
-                        $child = is_object($default_attributes[$name]) ? $default_attributes[$name] : new $class_name($default_attributes[$name]);
+                        $child = is_object($default_attributes[$name]) ? $default_attributes[$name] : new $class_name($this->podio, $default_attributes[$name]);
                         $child->add_relationship($this, $name);
                         $this->set_attribute($name, $child);
                     } elseif ($type == 'has_many' && is_array($default_attributes[$name])) {
@@ -75,7 +75,7 @@ class PodioObject
                         } else {
                             $values = array();
                             foreach ($default_attributes[$name] as $value) {
-                                $child = is_object($value) ? $value : new $class_name($value);
+                                $child = is_object($value) ? $value : new $class_name($this->podio, $value);
                                 $values[] = $child;
                             }
                             $collection = new PodioCollection($values);
@@ -215,7 +215,8 @@ class PodioObject
     public function member($response)
     {
         if ($response) {
-            return array_merge($response->json_body(), array('__api_values' => true));
+            $this->init(array_merge($response->json_body(), array('__api_values' => true)));
+            return $this;
         }
         return null;
     }
@@ -270,6 +271,39 @@ class PodioObject
     }
 
     /**
+     * Array access. Set item by offset, automatically adding relationship.
+     */
+    public function offsetSet($offset, $value)
+    {
+        if(isset($this->__attributes[$offset]) )
+            $this->__attributes[$offset] = $value;
+    }
+
+    /**
+     * Array access. Check for existence.
+     */
+    public function offsetExists($offset)
+    {
+        return isset($this->__attributes[$offset]);
+    }
+
+    /**
+     * Array access. Unset.
+     */
+    public function offsetUnset($offset)
+    {
+        unset($this->__attributes[$offset]);
+    }
+
+    /**
+     * Array access. Get.
+     */
+    public function offsetGet($offset)
+    {
+        return isset($this->__attributes[$offset]) ? $this->__attributes[$offset] : null;
+    }
+
+    /**
      * Raw access to attributes. Only used for unit testing. Do not use.
      */
     public function __attribute($name)
@@ -301,11 +335,76 @@ class PodioObject
         }
     }
 
-    public function as_json()
+    public function as_json($encoded = true)
     {
-        // Made it like this to maintain old code stuff...
-
-        return json_encode($this);
+        $result = array();
+        foreach ($this->__properties as $name => $property) {
+            if (!$this->has_relationship($name) && $this->has_attribute($name) && !is_null($this->__attributes[$name])) {
+                $result[$name] = $this->__attributes[$name];
+            }
+        }
+        foreach ($this->__relationships as $name => $type) {
+            if ($type == 'has_one') {
+                $target_name = $name;
+                if (!empty($this->__properties[$name]['options']['json_target'])) {
+                    $target_name = $this->__properties[$name]['options']['json_target'];
+                }
+                if ($this->has_attribute($name)) {
+                    if (!empty($this->__properties[$name]['options']['json_value'])) {
+                        $result[$target_name] = $this->__attributes[$name]->{$this->__properties[$name]['options']['json_value']};
+                    }
+                    elseif (is_a($this->__attributes[$name], 'PodioFieldCollection')) {
+                        foreach ($this->__attributes[$name] as $field) {
+                            // Only use external_id for item fields
+                            $key = $field->external_id && is_a($this->__attributes[$name], 'PodioItemFieldCollection') ? $field->external_id : $field->id;
+                            $list[$key] = $field->as_json(false);
+                        }
+                        $result[$name] = $list;
+                    }
+                    elseif (is_object($this->__attributes[$name]) && get_class($this->__attributes[$name]) == 'PodioReference') {
+                        $result['ref_type'] = $this->__attributes[$name]->type;
+                        $result['ref_id'] = $this->__attributes[$name]->id;
+                    }
+                    else {
+                        $child = $this->__attributes[$name]->as_json(false);
+                        if ($child) {
+                            $result[$target_name] = $child;
+                        }
+                    }
+                }
+            }
+            elseif ($type == 'has_many') {
+                if ($this->has_attribute($name)) {
+                    $list = array();
+                    foreach ($this->__attributes[$name] as $item) {
+                        if (!empty($this->__properties[$name]['options']['json_value'])) {
+                            $list[] = $item->{$this->__properties[$name]['options']['json_value']};
+                        }
+                        // TODO: This really should be moved to PodioCollection (should implement as_json)
+                        //       and PodioItemFieldCollection for the special case
+                        elseif (get_class($this->__attributes[$name]) === 'PodioItemFieldCollection') {
+                            $key = $item->external_id ? $item->external_id : (string)$item->field_id;
+                            $list[$key] = $item->as_json(false);
+                        }
+                        else {
+                            $list[] = $item->as_json(false);
+                        }
+                    }
+                    if ($list) {
+                        if (!empty($this->__properties[$name]['options']['json_target'])) {
+                            $result[$this->__properties[$name]['options']['json_target']] = $list;
+                        }
+                        else {
+                            $result[$name] = $list;
+                        }
+                    }
+                }
+            }
+        }
+        if ($result) {
+            return $encoded ? json_encode($result) : $result;
+        }
+        return null;
     }
 
 }
