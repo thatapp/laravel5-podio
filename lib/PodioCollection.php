@@ -28,7 +28,8 @@ class PodioCollection implements IteratorAggregate, ArrayAccess, Countable
         foreach ($this->__items as $item) {
             $items[] = json_encode($item);
         }
-        return print_r($items, true);
+
+        return (string)print_r($items, true);
     }
 
     /**
@@ -52,13 +53,13 @@ class PodioCollection implements IteratorAggregate, ArrayAccess, Countable
      */
     public function offsetSet($offset, $value)
     {
-        if (!is_a($value, 'PodioObject')) {
+        if (!is_a($value, 'PodioObject') && !is_array($value)) {
             throw new PodioDataIntegrityError("Objects in PodioCollection must be of class PodioObject");
         }
 
         // If the collection has a relationship with a parent, add it to the item as well.
         $relationship = $this->relationship();
-        if ($relationship) {
+        if ($relationship && !is_array($value)) {
             $value->add_relationship($relationship['instance'], $relationship['property']);
         }
 
