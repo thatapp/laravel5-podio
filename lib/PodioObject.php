@@ -68,17 +68,17 @@ class PodioObject implements ArrayAccess
                             $values = $default_attributes[$name];
                             // Make sure we pass along info on whether the values property
                             // contains API style values or not
-                            $collection = new PodioItemFieldCollection($values, $has_api_values);
+                            $collection = new PodioItemFieldCollection($this->podio, $values, $has_api_values);
                         } elseif ($class_name == 'PodioAppField') {
                             $values = $default_attributes[$name];
-                            $collection = new PodioAppFieldCollection($values);
+                            $collection = new PodioAppFieldCollection($this->podio, $values);
                         } else {
                             $values = array();
                             foreach ($default_attributes[$name] as $value) {
                                 $child = is_object($value) ? $value : new $class_name($this->podio, $value);
                                 $values[] = $child;
                             }
-                            $collection = new PodioCollection($values);
+                            $collection = new PodioCollection($this->podio, $values);
                         }
                         $collection->add_relationship($this, $name);
                         $this->set_attribute($name, $collection);
@@ -275,7 +275,7 @@ class PodioObject implements ArrayAccess
      */
     public function offsetSet($offset, $value)
     {
-        if(isset($this->__attributes[$offset]) )
+        if (isset($this->__attributes[$offset]))
             $this->__attributes[$offset] = $value;
     }
 
@@ -352,28 +352,24 @@ class PodioObject implements ArrayAccess
                 if ($this->has_attribute($name)) {
                     if (!empty($this->__properties[$name]['options']['json_value'])) {
                         $result[$target_name] = $this->__attributes[$name]->{$this->__properties[$name]['options']['json_value']};
-                    }
-                    elseif (is_a($this->__attributes[$name], 'PodioFieldCollection')) {
+                    } elseif (is_a($this->__attributes[$name], 'PodioFieldCollection')) {
                         foreach ($this->__attributes[$name] as $field) {
                             // Only use external_id for item fields
                             $key = $field->external_id && is_a($this->__attributes[$name], 'PodioItemFieldCollection') ? $field->external_id : $field->id;
                             $list[$key] = $field->as_json(false);
                         }
                         $result[$name] = $list;
-                    }
-                    elseif (is_object($this->__attributes[$name]) && get_class($this->__attributes[$name]) == 'PodioReference') {
+                    } elseif (is_object($this->__attributes[$name]) && get_class($this->__attributes[$name]) == 'PodioReference') {
                         $result['ref_type'] = $this->__attributes[$name]->type;
                         $result['ref_id'] = $this->__attributes[$name]->id;
-                    }
-                    else {
+                    } else {
                         $child = $this->__attributes[$name]->as_json(false);
                         if ($child) {
                             $result[$target_name] = $child;
                         }
                     }
                 }
-            }
-            elseif ($type == 'has_many') {
+            } elseif ($type == 'has_many') {
                 if ($this->has_attribute($name)) {
                     $list = array();
                     foreach ($this->__attributes[$name] as $item) {
@@ -385,16 +381,14 @@ class PodioObject implements ArrayAccess
                         elseif (get_class($this->__attributes[$name]) === 'PodioItemFieldCollection') {
                             $key = $item->external_id ? $item->external_id : (string)$item->field_id;
                             $list[$key] = $item->as_json(false);
-                        }
-                        else {
+                        } else {
                             $list[] = $item->as_json(false);
                         }
                     }
                     if ($list) {
                         if (!empty($this->__properties[$name]['options']['json_target'])) {
                             $result[$this->__properties[$name]['options']['json_target']] = $list;
-                        }
-                        else {
+                        } else {
                             $result[$name] = $list;
                         }
                     }

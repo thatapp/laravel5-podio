@@ -8,12 +8,14 @@ class PodioCollection implements IteratorAggregate, ArrayAccess, Countable
 {
     private $__items = array();
     private $__belongs_to;
+    protected $podio;
 
     /**
      * Constructor. Pass in an array of PodioObject objects.
      */
-    public function __construct($items = array())
+    public function __construct($podio, $items = array())
     {
+        $this->podio = $podio;
         foreach ($items as $item) {
             $this->offsetSet(null, $item);
         }
