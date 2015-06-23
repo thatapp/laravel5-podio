@@ -6,16 +6,17 @@ class PodioItemCollection extends PodioCollection
     public $total;
 
     /**
-     * @param $items An array of PodioItem objects
+     * @param $podio
+     * @param An|array $items An array of PodioItem objects
      * @param $filtered Count of items in current selected
      * @param $total Total number of items if no filters were to apply
      */
-    public function __construct($items = array(), $filtered = null, $total = null)
+    public function __construct($podio, $items = array(), $filtered = null, $total = null)
     {
         $this->filtered = $filtered;
         $this->total = $total;
 
-        parent::__construct($items);
+        parent::__construct($podio, $items);
     }
 
     // Array access
