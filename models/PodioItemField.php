@@ -202,11 +202,11 @@ class PodioEmbedItemField extends PodioItemField
         $attribute = parent::__get($name);
         if ($name == 'values' && $attribute) {
             // Create PodioCollection from raw values
-            $embeds = new PodioCollection();
+            $embeds = new PodioCollection($this->podio);
             foreach ($attribute as $value) {
-                $embed = new PodioEmbed($value['embed']);
+                $embed = new PodioEmbed($this->podio, $value['embed']);
                 if (!empty($value['file'])) {
-                    $embed->files = new PodioCollection(array(new PodioFile($value['file'])));
+                    $embed->files = new PodioCollection($this->podio, array(new PodioFile($this->podio, $value['file'])));
                 }
                 $embeds[] = $embed;
             }
@@ -642,9 +642,9 @@ class PodioContactItemField extends PodioItemField
         $attribute = parent::__get($name);
         if ($name == 'values' && $attribute) {
             // Create PodioCollection from raw values
-            $collection = new PodioCollection();
+            $collection = new PodioCollection($this->podio);
             foreach ($attribute as $value) {
-                $collection[] = new PodioContact($value['value']);
+                $collection[] = new PodioContact($this->podio, $value['value']);
             }
             return $collection;
         }
@@ -723,9 +723,9 @@ class PodioAppItemField extends PodioItemField
         $attribute = parent::__get($name);
         if ($name == 'values' && $attribute) {
             // Create PodioCollection from raw values
-            $collection = new PodioCollection();
+            $collection = new PodioCollection($this->podio);
             foreach ($attribute as $value) {
-                $collection[] = new PodioItem($value['value']);
+                $collection[] = new PodioItem($this->podio, $value['value']);
             }
             return $collection;
         }
@@ -891,9 +891,9 @@ class PodioAssetItemField extends PodioItemField
         $attribute = parent::__get($name);
         if ($name == 'values' && $attribute) {
             // Create PodioCollection from raw values
-            $collection = new PodioCollection();
+            $collection = new PodioCollection($this->podio);
             foreach ($attribute as $value) {
-                $collection[] = new PodioFile($value['value']);
+                $collection[] = new PodioFile($this->podio, $value['value']);
             }
             return $collection;
         }

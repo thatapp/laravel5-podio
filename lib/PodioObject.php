@@ -231,7 +231,7 @@ class PodioObject implements ArrayAccess
                     $list[] = array_merge($attributes, array('__api_values' => true));
                 }
             }
-            return new $collection_type($this, $list, $body['filtered'], $body['total']);
+            return new $collection_type($this->podio, $list, $body['filtered'], $body['total']);
         }
 
         return null;
