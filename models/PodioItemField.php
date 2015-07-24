@@ -47,10 +47,17 @@ class PodioItemField extends PodioObject
 
     /**
      * Overwrites normal as_json to use api_friendly_values
+     * @param bool $api_values
+     * @param bool $encoded
+     * @return array|null|PodioItemField|string
      */
-    public function as_json($encoded = true)
+    public function as_json($api_values = false, $encoded = true)
     {
+
+        if (!$api_values) return parent::as_json($encoded);
+
         $result = $this->api_friendly_values();
+
         return $encoded ? json_encode($result) : $result;
     }
 
