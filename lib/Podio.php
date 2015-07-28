@@ -291,7 +291,7 @@ class Podio
         $response = new PodioResponse();
         $raw_response = curl_exec($this->ch);
         $raw_headers_size = curl_getinfo($this->ch, CURLINFO_HEADER_SIZE);
-        $response->body = utf8_encode(substr($raw_response, $raw_headers_size));
+        $response->body = substr($raw_response, $raw_headers_size);
         $response->status = curl_getinfo($this->ch, CURLINFO_HTTP_CODE);
         $response->headers = Podio::parse_headers(substr($raw_response, 0, $raw_headers_size));
         $this->last_response = $response;
