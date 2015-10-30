@@ -215,8 +215,7 @@ class PodioObject implements ArrayAccess
     public function member($response)
     {
         if ($response) {
-            $this->init(array_merge($response->json_body(), array('__api_values' => true)));
-            return $this;
+            array_merge($response->json_body(), array('__api_values' => true));
         }
         return null;
     }
